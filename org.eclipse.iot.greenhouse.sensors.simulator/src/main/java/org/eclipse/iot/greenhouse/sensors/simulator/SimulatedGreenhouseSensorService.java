@@ -19,6 +19,7 @@ public class SimulatedGreenhouseSensorService implements
 	private List<SensorChangedListener> _listeners = new CopyOnWriteArrayList<SensorChangedListener>();
 
 	float _temperature = 20;
+	float _humidity = 55;
 	String _lightState = "on";
 
 	public SimulatedGreenhouseSensorService() {
@@ -31,6 +32,9 @@ public class SimulatedGreenhouseSensorService implements
 					public void run() {
 						_temperature = 20 + new Random().nextFloat() * 10;
 						notifyListeners("temperature", _temperature);
+						
+						_humidity = 55 + new Random().nextFloat() * 10;
+						notifyListeners("humidity", _humidity);
 
 						_lightState = (new Random().nextInt(10) < 8) ? "on"
 								: "off";
@@ -45,6 +49,7 @@ public class SimulatedGreenhouseSensorService implements
 			throws NoSuchSensorOrActuatorException {
 		if ("temperature".equals(sensorName))
 			return _temperature;
+		else if ("humidity".equals(sensorName)) return _humidity;
 		else if ("light".equals(sensorName))
 			return _lightState;
 		else
