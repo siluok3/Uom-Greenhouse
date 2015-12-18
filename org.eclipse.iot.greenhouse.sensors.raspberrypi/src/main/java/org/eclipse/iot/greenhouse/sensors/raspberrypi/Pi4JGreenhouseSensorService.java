@@ -29,10 +29,12 @@ public class Pi4JGreenhouseSensorService implements SensorService {
 	private List<SensorChangedListener> _listeners = new CopyOnWriteArrayList<SensorChangedListener>();
 	private I2CBus _i2cbus;
 	private I2CDevice _temperatureSensor;
+	private I2CDevice _humiditySensor;
 	private GpioController _gpioController;
 	private GpioPinDigitalMultipurpose _lightActuator;
 
 	private float _temperatureRef = Float.MIN_VALUE;
+	private float _humidityRef = Float.MIN_VALUE;
 
 	private ScheduledThreadPoolExecutor _scheduledThreadPoolExecutor;
 	private ScheduledFuture<?> _handle;
@@ -43,12 +45,13 @@ public class Pi4JGreenhouseSensorService implements SensorService {
 			_i2cbus = I2CFactory.getInstance(I2CBus.BUS_1);
 
 			_temperatureSensor = _i2cbus.getDevice(0x40);
+			_humiditySensor = i2cbus.getDevice(0x40);
 			_lightActuator = _gpioController.provisionDigitalMultipurposePin(
 					RaspiPin.GPIO_00, "led", PinMode.DIGITAL_OUTPUT);
 			_lightActuator.setShutdownOptions(true); // unexport on shutdown
 
-			// monitor temperature changes
-			// every change of more than 0.1C will notify SensorChangedListeners
+			// monitor temperature and humidity changes
+			// every change of more than 0.1C or 1%RH will notify SensorChangedListeners
 			_scheduledThreadPoolExecutor = new ScheduledThreadPoolExecutor(1);
 			_handle = _scheduledThreadPoolExecutor.scheduleAtFixedRate(
 					new Runnable() {
@@ -61,7 +64,15 @@ public class Pi4JGreenhouseSensorService implements SensorService {
 											newTemperature);
 									_temperatureRef = newTemperature;
 								}
-							} catch (IOException e) {
+							}
+							try  {
+								float newHumidity = readHumidity();
+								if (Math.abs(_humidityRef - newHumidity) > 1f){
+									notifyListeners("humidity",newHumidity);
+									_humidityRef = newHumidity;
+								}
+							}
+							catch (IOException e) {
 								// TODO Auto-generated catch block
 								e.printStackTrace();
 							}
@@ -101,7 +112,15 @@ public class Pi4JGreenhouseSensorService implements SensorService {
 			} catch (IOException e) {
 				return new NoSuchSensorOrActuatorException();
 			}
-		} else if ("light".equals(sensorName)) {
+		}
+		else if ("humidity".equals(sensorName)){
+			try{
+				return readHumidity();
+			} catch (IOException e){
+				return new NoSuchSensorOrActuatorException();
+			}
+		}
+		else if ("light".equals(sensorName)) {
 			return readLightState();
 		} else
 			throw new SensorService.NoSuchSensorOrActuatorException();
@@ -141,6 +160,38 @@ public class Pi4JGreenhouseSensorService implements SensorService {
 		// truncate to 2 decimals
 		DecimalFormat twoDForm = new DecimalFormat("#.##");
 		return Float.valueOf(twoDForm.format(temperature));
+	}
+	
+	private synchronized float readHumidity() throws IOException {
+		float humidity;
+		// Set START (D0) in CONFIG to begin a new conversion
+		_temperatureSensor.write(0x03);
+
+		// Poll RDY (D0) in STATUS (register 0) until it is low (=0)
+		int status = -1;
+		while ((status & 0x01) != 0) {
+			status = _humiditySensor.read(0x00);
+		}
+
+		// Read the upper and lower bytes of the RH value from
+		// DATAh and DATAl (registers 0x01 and 0x02), respectively
+		byte[] buffer = new byte[3];
+		_humiditySensor.read(buffer, 0, 3);
+
+		int dataH = buffer[1] & 0xff;
+		int dataL = buffer[2] & 0xff;
+		
+		// s_logger.info("I2C: [{}, {}]", new Object[] {dataH, dataL} );
+
+		humidity = (dataH * 256 + dataL) >> 4;
+		humidity = (humidity / 16f) - 24f;
+		
+                //For debugging purposes 
+		// s_logger.info("Humidity: {}", humidity);
+		
+		// truncate to 2 decimals
+		DecimalFormat twoDForm = new DecimalFormat("#.##");
+		return Float.valueOf(twoDForm.format(humidity));
 	}
 
 	private boolean readLightState() {
