@@ -93,6 +93,18 @@ public class GreenhouseCoapServer implements SensorChangedListener {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
+		
+		// add the humidity sensor
+		try {
+			SensorResource humidityResource = new SensorResource(
+					"humidity");
+			humidityResource.setSensorValue(""
+					+ _sensorService.getSensorValue("humidity"));
+			_sensorsRootResource.add(humidityResource);
+		} catch (NoSuchSensorOrActuatorException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
 
 		s_logger.info("Activating GreenhouseCoapServer... Done.");
 	}
