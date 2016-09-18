@@ -165,7 +165,7 @@ public class Pi4JGreenhouseSensorService implements SensorService {
 	private synchronized float readHumidity() throws IOException {
 		float humidity;
 		// Set START (D0) in CONFIG to begin a new conversion
-		_humiditySensor.write(0x03);
+		_humiditySensor.write(0x03, (byte) 0x01);
 
 		// Poll RDY (D0) in STATUS (register 0) until it is low (=0)
 		int status = -1;
